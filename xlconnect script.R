@@ -88,6 +88,10 @@ namedata$Sex <- as.factor(namedata$Sex)
 namedata <- namedata %>% group_by(Sex, Year) %>% 
   mutate(Rank = rank(-No., ties.method = "min")) %>% ungroup()
 
+# Final correction - Michael appears twice in 1988, I'm guessing that the lower ranked entry 
+# should be 'Micheal'
+namedata[3500,2] <- "Micheal"
+
 write.csv(namedata, row.names = F, file = "NZnamedata.csv")
 
 
