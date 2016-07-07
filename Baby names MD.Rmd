@@ -1,0 +1,224 @@
+---
+title: "NZ Baby Names"
+author: "Tim Hill"
+date: "1 July 2016"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+```{r, message=F, warning = F, echo = F}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(RColorBrewer)
+
+babynames <- read.csv("NZnamedata.csv", header=T)
+```
+
+
+For the first couple of plots we'll look at three generations of my family - my parents, my sister and myself, and my two children.
+
+```{r, echo = F}
+girlsnames <- c("Elizabeth","Amelia","Ann")
+boysnames <- c("Timothy", "Charlie","Roger")
+selnames <- filter(babynames, (Name %in% girlsnames & Sex =="Girl") | 
+                     (Name %in% boysnames & Sex =="Boy"))
+
+```
+
+Plot 1 shows the number of babies with the given names for the period 1954 - 2015
+
+```{r, echo = F}
+ggplot(data = selnames, aes(x = Year, y = No., colour = Name)) +
+  geom_line(aes(colour = Name)) + 
+  scale_color_brewer(palette = "Set2") +
+  theme_bw() + 
+  labs(title = "Plot 1 - Number of babies with selected names", y = "Babies named") +
+  theme(legend.key = element_blank())
+```
+
+Plot 2 shows the ranking of the selected names (rank 1 = most popular name)
+
+```{r, echo = F}
+ggplot(data = selnames, aes(x = Year, y = Rank, colour = Name)) +
+  geom_line(aes(colour = Name)) + 
+  scale_color_brewer(palette = "Set2") +
+  theme_bw() + 
+  scale_y_reverse(breaks = seq(0,100,15)) + 
+  labs(title = "Plot 2 - Ranking of selected names", y = "Name Rank") + 
+  scale_x_continuous(breaks = seq(0, 2015, 10)) + 
+  theme(legend.key = element_blank())
+```
+
+From the two plots above, you can probably guess what generation each of the names come from.
+
+
+Now we'll dig into the data a bit deeper.  What are the most popular names in the period 1955 - 2015?
+
+```{r, echo = F}
+### Boys names
+topboynames <- babynames %>% 
+  filter(Sex == "Boy") %>% 
+  group_by(Name) %>% 
+  summarise(Number = sum(No.)) %>% 
+  arrange(-Number) %>% 
+  slice(1:10) %>% 
+  mutate(Name = reorder(Name, -Number, sum)) 
+
+ggplot(topboynames, aes(x = Name, y = Number)) + 
+  geom_bar(stat="identity") +
+  labs(title="Plot 3 - Most popular boys names 1955-2015", y = "Number of babies") +
+  theme_bw()
+
+
+### Girls names
+topgirlnames <- babynames %>% 
+  filter(Sex == "Girl") %>% 
+  group_by(Name) %>% 
+  summarise(Number = sum(No.)) %>% 
+  arrange(-Number) %>% 
+  slice(1:10) %>% 
+  mutate(Name = reorder(Name, -Number, sum))
+
+ggplot(topgirlnames, aes(x = Name, y = Number)) + 
+  geom_bar(stat="identity") +
+  labs(title="Plot 4 - Most popular girls names 1955-2015", y = "Number of babies") +
+  theme_bw()
+
+```
+
+
+So what is the popularity of those names on a year by year basis?
+For a cleaner plot, we'll only look at the top 6 for each sex.
+
+```{r, echo = F}
+### Top boys names
+
+# Create vector of names
+top6boysvec <- topboynames %>% select(Name) %>% slice(1:6) %>% droplevels() %>% .$Name
+
+# Create df
+top6boysdata <- babynames %>% filter(Name %in% top6boysvec & Sex == "Boy") %>% droplevels()
+
+# Create plot  
+ggplot(data = top6boysdata, aes(x = Year, y = Rank, colour = Name)) +
+  geom_line(aes(colour = Name)) + 
+  scale_color_brewer(palette = "Set2") +
+  theme_bw() + 
+  scale_y_reverse(breaks = c(1,10,20,30,40,50,60,70,80,90,100)) + 
+  labs(title = "Plot 5 - Ranking of top boys names", y = "Name Rank") + 
+  scale_x_continuous(breaks = seq(0, 2015, 10)) + 
+  theme(legend.key = element_blank())
+
+### Top girls names
+
+# Create vector of required names
+top6girlsvec <- topgirlnames %>% select(Name) %>% slice(1:6) %>% droplevels() %>% .$Name
+
+# Create df 
+top6girlsdata <- babynames %>% filter(Name %in% top6girlsvec & Sex == "Girl") %>% droplevels()
+
+# Create plot  
+ggplot(data = top6girlsdata, aes(x = Year, y = Rank, colour = Name)) +
+  geom_line(aes(colour = Name)) + 
+  scale_color_brewer(palette = "Set2") +
+  theme_bw() + 
+  scale_y_reverse(breaks = c(1,10,20,30,40,50,60,70,80,90,100)) + 
+  labs(title = "Plot 6 - Ranking of girls names", y = "Name Rank") + 
+  scale_x_continuous(breaks = seq(0, 2015, 10)) + 
+  theme(legend.key = element_blank())
+
+```
+
+Generally speaking, the most popular names have shown a decline in recent years.
+
+What about sudden changes in popularity?
+To look at this, two new variables will be created.
+
+- **difference** - this is the difference in the number of babies with that name from one year to the next.
+- **diffrank** - the difference in ranking for that name from one year to the next
+
+```{r, echo = F, cache = T}
+
+### Need to add a variable with the annual difference - probably a cleaner way to do this
+difference <- numeric(length = nrow(babynames))
+diffrank <- numeric(length = nrow(babynames))
+
+for(i in seq(1, nrow(babynames))) {
+  currentyear <- babynames[i,1]
+  currentname <- as.character(babynames[i,2])
+  currentsex <- as.character(babynames[i,4])
+  currentnum <- babynames[i,3]
+  currentrank <- babynames[i,5]
+  lastyear <- currentyear-1
+  lastyear <- filter(babynames, Year == lastyear & Name == currentname & Sex == currentsex)
+  lastnum <- ifelse(nrow(lastyear) == 0, 0, lastyear$No. )
+  lastrank <- ifelse(nrow(lastyear) == 0, 101, lastyear$Rank )
+  
+  difference[i] <- (currentnum - lastnum)
+  diffrank[i] <- (lastrank - currentrank)
+}
+
+babynames <- cbind(babynames, difference, diffrank)
+
+#########
+
+
+
+girlsdiffrank <- babynames %>% filter(Year != "1954" & Sex == "Girl") %>% arrange(-abs(diffrank)) %>% distinct(Name) %>% slice(1:6)
+girlsdiffrank
+
+plotdatagirls <- filter(babynames, Name %in% girlsdiffrank$Name)
+
+ggplot(plotdatagirls, aes(x = Year, y = Rank, group = Name, colour = Name)) + 
+  geom_line(aes(colour = Name)) +
+  scale_color_brewer(palette = "Set2") +
+  theme_bw() + 
+  labs(title = "Plot 7 - Top 6 movers in girls names") +
+  scale_y_reverse(breaks = c(1,10,20,30,40,50,60,70,80,90,100)) +
+  theme(legend.key = element_blank())
+```
+
+
+```{r, echo = F, cache = T}
+
+boysdiffrank <- babynames %>% filter(Year != "1954" & Sex == "Boy") %>% arrange(-abs(diffrank)) %>% distinct(Name) %>% slice(1:6)
+boysdiffrank
+
+plotdataboys <- filter(babynames, Name %in% boysdiffrank$Name)
+
+ggplot(plotdataboys, aes(x = Year, y = Rank, group = Name, colour = Name)) + 
+  geom_line(aes(colour = Name)) +
+  scale_color_brewer(palette = "Set2") +
+  theme_bw() + 
+  labs(title = "Plot 8 - Top 6 movers in boys names") +
+  scale_y_reverse(breaks = c(1,10,20,30,40,50,60,70,80,90,100)) +
+  theme(legend.key = element_blank())
+
+
+```
+
+Some definite cultural events there - the name Brandon appearing from nowhere in 1992 due to 90210, and Jorja in 2003 - presumably thanks to Jorja Fox in CSI. 
+
+The baby name data only contains details on the top 100 names for each year - what proportion of babies are included in this?  Are there many babies with names that don't make the top 100?
+
+First, lets look at how many babies are included in the given data:
+
+```{r, echo = F}
+yeartotals <- babynames %>% 
+  group_by(Sex, Year) %>% 
+  summarise(Total.in.top.100 = sum(No.))
+
+ggplot(yeartotals, aes(x = Year, y = Total.in.top.100, group = Sex)) +
+  geom_line(aes(colour = Sex)) +
+  scale_color_brewer(palette = "Set2") +
+  theme_bw() +
+  theme(legend.key = element_blank()) +
+  labs(title = "Plot 9 - How many babies are included in the top 100 for each year?")
+
+```
+
+Unless the birth rate is dropping drastically, it appears that the top 100 names are accounting for a smaller and smaller proportion of new babies.
+
+
