@@ -92,6 +92,7 @@ birthdata.na <- mutate(birthdata.na, liveFemaleTotal = liveTotal - liveMaleTotal
 birthdata <- rbind(birthdata.na, birthdata.complete)
 with(birthdata, plot(y = liveMaleTotal/liveTotal, x = year))
 
+write.csv(birthdata, row.names = F, file = "data/birthdata.csv")
 
 
 
